@@ -1,0 +1,1641 @@
+#!/usr/bin/env bash
+
+# This file is part of BashUI.
+#
+# BashUI is a lightweight toolkit for building styled terminal dialogs in Bash.
+# It includes framed boxes, user input prompts, list selections, text formatting,
+# and customizable visual styles.
+#
+# Author: Jean-Philippe Fleury <https://github.com/jpfleury>
+# Copyright © Jean-Philippe Fleury, 2021-2025.
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+################################################################################
+## @title Configuration
+################################################################################
+
+declare -A CONF_DISPLAY=(
+	[center_main_titles]=true
+	[format_text]=true
+	[max_width_line]=80
+)
+
+conf_file=${BASHUI_CONF:-$PWD/bashui.conf.sh}
+
+if [[ -f $conf_file ]]; then
+	# shellcheck disable=SC1090
+	source "$conf_file"
+fi
+
+declare -r CONF_DISPLAY
+
+# ╒════════════════════════════════════════════════════════════════════════╕
+# │ DO NOT EDIT BELOW THIS LINE UNLESS YOU KNOW EXACTLY WHAT YOU'RE DOING. │
+# │ MODIFICATIONS MAY BREAK CORE FUNCTIONALITY.                            │
+# ╘════════════════════════════════════════════════════════════════════════╛
+
+################################################################################
+## @title Constants
+################################################################################
+
+########################################
+## @subtitle Text formatting
+########################################
+
+declare -A FORMAT=(
+	[blink]=$(tput blink 2> /dev/null)
+	[bold]=$(tput bold 2> /dev/null)
+	[default]=$(tput sgr0 2> /dev/null)
+	
+	[success]=$'\033[1;32m' # Bold green
+	[success_bg]=$'\033[1;42m' # Bold; green background
+	
+	[warning]=$'\033[1;33m' # Bold orange
+	[warning_bg]=$'\033[1;43m' # Bold; orange background
+	
+	[error]=$'\033[1;91m' # Bold red
+	[error_bg]=$'\033[1;41m' # Bold; red background
+)
+
+BREAK="~~~"
+N=$'\n'
+NN=$N$N
+
+declare -r FORMAT BREAK N NN
+
+########################################
+## @subtitle Box styles
+########################################
+
+declare -A ONE_ROW_BOX_STYLES=(
+	[0,0]="╔"    # ╔═══════════════╗
+	[0,1]="╗"    # ║  Lorem ipsum  ║
+	[0,2]="╝"    # ╚═══════════════╝
+	[0,3]="╚"
+	[0,4]="═"
+	[0,5]="║"
+	
+	[1,0]="╒"    # ╒═══════════════╕
+	[1,1]="╕"    # │  Lorem ipsum  │
+	[1,2]="╛"    # ╘═══════════════╛
+	[1,3]="╘"
+	[1,4]="═"
+	[1,5]="│"
+	
+	[2,0]="┏"    # ┏━━━━━━━━━━━━━━━┓
+	[2,1]="┓"    # ┃  Lorem ipsum  ┃
+	[2,2]="┛"    # ┗━━━━━━━━━━━━━━━┛
+	[2,3]="┗"
+	[2,4]="━"
+	[2,5]="┃"
+	
+	[3,0]="┌"    # ┌───────────────┐
+	[3,1]="┐"    # │  Lorem ipsum  │
+	[3,2]="┘"    # └───────────────┘
+	[3,3]="└"
+	[3,4]="─"
+	[3,5]="│"
+	
+	[4,0]="╭"    # ╭───────────────╮
+	[4,1]="╮"    # │  Lorem ipsum  │
+	[4,2]="╯"    # ╰───────────────╯
+	[4,3]="╰"
+	[4,4]="─"
+	[4,5]="│"
+	
+	[5,0]="┌"    # ┌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┐
+	[5,1]="┐"    # ┊  Lorem ipsum  ┊
+	[5,2]="┘"    # └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘
+	[5,3]="└"
+	[5,4]="╌"
+	[5,5]="┊"
+	
+	[6,0]="╭"    # ╭╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╮
+	[6,1]="╮"    # ┊  Lorem ipsum  ┊
+	[6,2]="╯"    # ╰╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╯
+	[6,3]="╰"
+	[6,4]="╌"
+	[6,5]="┊"
+	
+	[7,0]="┏"    # ┏╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍┓
+	[7,1]="┓"    # ┇  Lorem ipsum  ┇
+	[7,2]="┛"    # ┗╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍┛
+	[7,3]="┗"
+	[7,4]="╍"
+	[7,5]="┇"
+	
+	[8,0]="╔"    # ╔╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╗
+	[8,1]="╗"    # ┇  Lorem ipsum  ┇
+	[8,2]="╝"    # ╚╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╝
+	[8,3]="╚"
+	[8,4]="╍"
+	[8,5]="┇"
+	
+	[9,0]="╔"    # ╔━━━━━━━━━━━━━━━╗
+	[9,1]="╗"    # ┃  Lorem ipsum  ┃
+	[9,2]="╝"    # ╚━━━━━━━━━━━━━━━╝
+	[9,3]="╚"
+	[9,4]="━"
+	[9,5]="┃"
+	
+	[10,0]="╳"    # ╳╳╳╳╳╳╳╳╳╳╳╳╳╳╳╳╳
+	[10,1]="╳"    # ╳  Lorem ipsum  ╳
+	[10,2]="╳"    # ╳╳╳╳╳╳╳╳╳╳╳╳╳╳╳╳╳
+	[10,3]="╳"
+	[10,4]="╳"
+	[10,5]="╳"
+	
+	[11,0]="#"    # #################
+	[11,1]="#"    # #  Lorem ipsum  #
+	[11,2]="#"    # #################
+	[11,3]="#"
+	[11,4]="#"
+	[11,5]="#"
+	
+	[12,0]="x"    # xxxxxxxxxxxxxxxxx
+	[12,1]="x"    # x  Lorem ipsum  x
+	[12,2]="x"    # xxxxxxxxxxxxxxxxx
+	[12,3]="x"
+	[12,4]="x"
+	[12,5]="x"
+	
+	[13,0]="+"    # +++++++++++++++++
+	[13,1]="+"    # +  Lorem ipsum  +
+	[13,2]="+"    # +++++++++++++++++
+	[13,3]="+"
+	[13,4]="+"
+	[13,5]="+"
+	
+	[14,0]="+"    # +---------------+
+	[14,1]="+"    # |  Lorem ipsum  |
+	[14,2]="+"    # +---------------+
+	[14,3]="+"
+	[14,4]="-"
+	[14,5]="|"
+	
+	[15,0]="+"    # +~~~~~~~~~~~~~~~+
+	[15,1]="+"    # |  Lorem ipsum  |
+	[15,2]="+"    # +~~~~~~~~~~~~~~~+
+	[15,3]="+"
+	[15,4]="~"
+	[15,5]="|"
+)
+
+declare -A TWO_ROW_BOX_STYLES=(
+	[0,0]="╔"    # ╔═══════════════╗
+	[0,1]="╗"    # ║  Lorem ipsum  ║
+	[0,2]="╣"    # ╠═══════════════╣
+	[0,3]="╠"    # │               │
+	[0,4]="═"    # │  Lorem ipsum  │
+	[0,5]="║"    # │               │
+	[0,6]="─"    # ╰───────────────╯
+	[0,7]="│"
+	[0,8]="╯"
+	[0,9]="╰"
+	
+	[1,0]="╔"    # ╔═══════════════╗
+	[1,1]="╗"    # ║  Lorem ipsum  ║
+	[1,2]="╣"    # ╠═══════════════╣
+	[1,3]="╠"    # ┊               ┊
+	[1,4]="═"    # ┊  Lorem ipsum  ┊
+	[1,5]="║"    # ┊               ┊
+	[1,6]="╌"    # └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘
+	[1,7]="┊"
+	[1,8]="┘"
+	[1,9]="└"
+	
+	[2,0]="╒"    # ╒═══════════════╕
+	[2,1]="╕"    # │  Lorem ipsum  │
+	[2,2]="╡"    # ╞═══════════════╡
+	[2,3]="╞"    # │               │
+	[2,4]="═"    # │  Lorem ipsum  │
+	[2,5]="│"    # │               │
+	[2,6]="─"    # └───────────────┘
+	[2,7]="│"
+	[2,8]="┘"
+	[2,9]="└"
+	
+	[3,0]="╒"    # ╒═══════════════╕
+	[3,1]="╕"    # │  Lorem ipsum  │
+	[3,2]="╡"    # ╞═══════════════╡
+	[3,3]="╞"    # │               │
+	[3,4]="═"    # │  Lorem ipsum  │
+	[3,5]="│"    # │               │
+	[3,6]="─"    # ╰───────────────╯
+	[3,7]="│"
+	[3,8]="╯"
+	[3,9]="╰"
+	
+	[4,0]="╒"    # ╒═══════════════╕
+	[4,1]="╕"    # │  Lorem ipsum  │
+	[4,2]="╡"    # ╞═══════════════╡
+	[4,3]="╞"    # │               │
+	[4,4]="═"    # │  Lorem ipsum  │
+	[4,5]="│"    # │               │
+	[4,6]="═"    # ╘═══════════════╛
+	[4,7]="│"
+	[4,8]="╛"
+	[4,9]="╘"
+	
+	[5,0]="┏"    # ┏━━━━━━━━━━━━━━━┓
+	[5,1]="┓"    # ┃  Lorem ipsum  ┃
+	[5,2]="┩"    # ┡━━━━━━━━━━━━━━━┩
+	[5,3]="┡"    # │               │
+	[5,4]="━"    # │  Lorem ipsum  │
+	[5,5]="┃"    # │               │
+	[5,6]="─"    # ╰───────────────╯
+	[5,7]="│"
+	[5,8]="╯"
+	[5,9]="╰"
+	
+	[6,0]="┏"    # ┏━━━━━━━━━━━━━━━┓
+	[6,1]="┓"    # ┃  Lorem ipsum  ┃
+	[6,2]="┩"    # ┡━━━━━━━━━━━━━━━┩
+	[6,3]="┡"    # ┊               ┊
+	[6,4]="━"    # ┊  Lorem ipsum  ┊
+	[6,5]="┃"    # ┊               ┊
+	[6,6]="╌"    # └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘
+	[6,7]="┊"
+	[6,8]="┘"
+	[6,9]="└"
+)
+
+declare -r ONE_ROW_BOX_STYLES TWO_ROW_BOX_STYLES
+
+################################################################################
+## @title Functions
+################################################################################
+
+########################################
+## @subtitle Main functions
+########################################
+
+# Display text inside a styled box. The first argument can contain a main title,
+# and optionally a subtitle or description, separated by the "$BREAK" constant.
+# Examples:
+# 
+# - text="Here's the main title"
+# - text="Here's the main title${BREAK}Here's a description"
+box() {
+	local text=$1
+	local text_style=$2
+	local border_style=$3
+	local newline_before=$4
+	local newline_after=$5
+	
+	local align box_content box_subtitle box_title dtsc length tsc
+	local sep_1 sep_2 sep_3
+	
+	# ------------------
+	
+	if [[ -z $text_style || ($text_style != "none" && -z ${FORMAT[$text_style]}) ]]; then
+		text_style="bold"
+	fi
+	
+	if ! is_bool "$newline_before"; then
+		newline_before=true
+	fi
+	
+	if [[ ! $newline_after =~ ^("true"|"true2"|"false")$ ]]; then
+		newline_after=true2
+	fi
+	
+	# ------------------
+	
+	if [[ ${CONF_DISPLAY[format_text]} == true && $text_style != "none" ]]; then
+		# Text style code
+		tsc=${FORMAT[$text_style]}
+		
+		# Default text style code
+		dtsc=${FORMAT[default]}
+	fi
+	
+	box_title=$(get_break "$text" 1)
+	box_subtitle=$(get_break "$text" 2)
+	length=$((CONF_DISPLAY[max_width_line] - 2))
+	
+	# Two-row box
+	#############
+	
+	if [[ -n $box_subtitle ]]; then
+		if ! is_pos_int "$border_style" true; then
+			border_style=3
+		fi
+		
+		init_box_style 2r "$border_style"
+		
+		sep_1="${BS[0]}$(repeat_char "${length}${BS[4]}")${BS[1]}"
+		sep_2="${BS[3]}$(repeat_char "${length}${BS[4]}")${BS[2]}"
+		sep_3="${BS[9]}$(repeat_char "${length}${BS[6]}")${BS[8]}"
+		
+		# Title
+		
+		box_content+=${tsc}${sep_1}${dtsc}${N}
+		box_content+=${tsc}$(pad_text "${box_title^^}" "${BS[5]}" "${CONF_DISPLAY[max_width_line]}${BREAK}1" "center")${dtsc}${N}
+		box_content+=${tsc}${sep_2}${dtsc}${N}
+		
+		# Subtitle
+		
+		box_content+=${tsc}$(pad_text "" "${BS[7]}" "${CONF_DISPLAY[max_width_line]}${BREAK}1")${dtsc}${N}
+		box_content+=${tsc}$(pad_text "$box_subtitle" "${BS[7]}" "${CONF_DISPLAY[max_width_line]}${BREAK}1")${dtsc}${N}
+		box_content+=${tsc}$(pad_text "" "${BS[7]}" "${CONF_DISPLAY[max_width_line]}${BREAK}1")${dtsc}${N}
+		box_content+=${tsc}${sep_3}${dtsc}
+	
+	# One-row box
+	#############
+	
+	else
+		if ! is_pos_int "$border_style" true; then
+			border_style=4
+		fi
+		
+		init_box_style 1r "$border_style"
+		
+		sep_1="${BS[0]}$(repeat_char "${length}${BS[4]}")${BS[1]}"
+		sep_2=""
+		sep_3="${BS[3]}$(repeat_char "${length}${BS[4]}")${BS[2]}"
+		
+		box_title_wo_formatting=$(remove_formatting "$box_title")
+		
+		if ((${#box_title_wo_formatting} > CONF_DISPLAY[max_width_line])); then
+			align="left"
+		else
+			align="center"
+		fi
+		
+		box_content+=${tsc}${sep_1}${dtsc}${N}
+		box_content+=${tsc}$(pad_text "$box_title" "${BS[5]}" "${CONF_DISPLAY[max_width_line]}${BREAK}1" "$align")${dtsc}${N}
+		box_content+=${tsc}${sep_3}${dtsc}
+	fi
+	
+	if [[ $newline_before == true ]]; then
+		box_content=${N}${box_content}
+	fi
+	
+	if [[ $newline_after == true2 ]]; then
+		box_content+=$NN
+	elif [[ $newline_after == true ]]; then
+		box_content+=$N
+	fi
+	
+	echo -n "$box_content"
+}
+
+# Prompt the user for input using a styled box. Arguments:
+# 
+# - $1: Title of the box. Special modes are available:
+#     - "yn" or "Yn" or "yN": Yes/No prompt. Capital letter indicates the default.
+#     - "sure": Generic confirmation prompt.
+#     - "list": List selection prompt. The description should contain:
+#         - First line: prompt or label for the list
+#         - Subsequent lines: list items (one per line)
+# - $2: Description text (used in standard or list modes)
+# - $3: Custom question prompt (overrides default, optional)
+# - $4: Allow empty response? true|false (default: true)
+# - $5: Indent the question line? true|false (default: true)
+# - $6: Timeout in seconds (optional; default: none)
+# - $7: Text style (optional; default: bold)
+# - $8: Border style (optional; default depends on the context)
+input() {
+	local title=$1
+	local description=$2
+	local question=$3
+	local empty_is_valid=$4
+	local indent_question=$5
+	local timeout_s=$6
+	local text_style=$7
+	local border_style=$8
+	
+	local answer answer_no items msg nb_items question_displayed type
+	
+	if ! is_bool "$empty_is_valid"; then
+		empty_is_valid=true
+	fi
+	
+	if ! is_bool "$indent_question"; then
+		indent_question=true
+	fi
+	
+	if [[ -z $text_style || ($text_style != "none" && -z ${FORMAT[$text_style]}) ]]; then
+		text_style="bold"
+	fi
+	
+	# ------------------
+	
+	if [[ $title == "list" ]]; then
+		type=$title
+		
+		title="SELECTION"
+		
+		items=${description#*"$N"}
+		description=${description%%"$N"*}
+		
+		if [[ -z $items ]]; then
+			if [[ -n $description ]]; then
+				items=$description
+				description=""
+			else
+				items="Default option"
+			fi
+		fi
+		
+		nb_items=$(count "$items" false)
+		items=$(numbered_list "$(echo -n "$items" | sort -V)")
+		
+		if ((nb_items > 1)); then
+			description="${description}${NN}The following items are available:"
+		else
+			description="${description}${NN}The following item is available:"
+		fi
+		
+		description+=${NN}${items}
+		question="Enter the number of your choice"
+		
+		if [[ $empty_is_valid == true ]]; then
+			question+=" (or 0 to cancel)"
+		fi
+		
+		question+=":"
+	elif [[ $title == "sure" ]]; then
+		type=$title
+		title="PLEASE CONFIRM"
+		question="Are you sure? [y/N]"
+	elif [[ ${title,,} =~ ^"yn"$ ]]; then
+		type=$title
+		title=$description
+		description=""
+		question="Enter your answer "
+		
+		if [[ $type == "Yn" ]]; then
+			question+="[Y/n]:"
+		else
+			question+="[y/N]:"
+		fi
+	else
+		type="standard"
+		
+		if [[ -n $description ]]; then
+			title=${title^^}
+		fi
+	fi
+	
+	if [[ -z $question ]]; then
+		question="Enter your answer: "
+	fi
+	
+	question_displayed=$question
+	
+	if [[ ! $question_displayed =~ " "$ ]]; then
+		question_displayed+=" "
+	fi
+	
+	if [[ $indent_question == true ]]; then
+		question_displayed="  # $question_displayed"
+		question_displayed=$(indent "$question_displayed")
+	fi
+	
+	if [[ ${CONF_DISPLAY[format_text]} == true ]]; then
+		question_displayed=${FORMAT[$text_style]}${question_displayed}${FORMAT[default]}
+	fi
+	
+	msg=$(box "${title}${BREAK}${description}" "$text_style" "$border_style")
+	msg+="${NN}${question_displayed}"
+	
+	while true; do
+		if is_pos_int "$timeout_s"; then
+			read -r -p "$msg" -t "$timeout_s" answer
+		else
+			read -r -p "$msg" answer
+		fi
+		
+		if [[ $type == "list" ]]; then
+			answer_no=$(sed -En 's/^(0|[1-9][0-9]*).*/\1/p' <<< "$answer")
+			
+			if is_pos_int "$answer_no"; then
+				answer=$(sed -En "s/^$answer_no\. +(.+)/\1/p" <<< "$items")
+			else
+				answer=""
+			fi
+		fi
+		
+		if [[ -n $answer || $empty_is_valid == true ]]; then
+			break
+		fi
+	done
+	
+	if [[ $question =~ ('[y/N]'|'[Y/n]')':'?$ ]]; then
+		answer=${answer,,}
+		
+		if [[ $question =~ '[Y/n]:'?$ && $answer != 'n' ]]; then
+			answer='y'
+		elif [[ $question =~ '[y/N]:'?$ && $answer != 'y' ]]; then
+			answer='n'
+		fi
+	fi
+	
+	echo -n "$answer"
+}
+
+# Display a styled title. Arguments:
+# 
+# - $1: Text of the title
+# - $2: Level (1, 2, 3, or 4):
+#     - Level 1: Full-width ASCII banner with extra padding
+#     - Level 2: Boxed title, centered
+#     - Level 3: Boxed title, aligned
+#     - Level 4: Minimal title with underline or prefix
+# - $3: Text style (default: success)
+# - $4: Border style number (optional)
+# - $5: Add newline before (true|false, default: true)
+# - $6: Add newline after (false|true|true2, default: true2)
+title() {
+	local text=$1
+	local level=$2
+	local text_style=$3
+	local border_style=$4
+	local newline_before=$5
+	local newline_after=$6
+	
+	local align length_part_1 length_part_2 length_part_3
+	local sep_1 sep_2 sep_3 sep_part_1 sep_part_2 sep_part_3 title
+	
+	if [[ ! $level =~ ^[1-4]$ ]]; then
+		level=1
+	fi
+	
+	if [[ -z $text_style || ($text_style != "none" && -z ${FORMAT[$text_style]}) ]]; then
+		text_style="success"
+	fi
+	
+	if ! is_bool "$newline_before"; then
+		newline_before=true
+	fi
+	
+	if [[ ! $newline_after =~ ^("true"|"true2"|"false")$ ]]; then
+		newline_after=true2
+	fi
+	
+	if [[ $newline_before == true ]]; then
+		title+=$N
+	fi
+	
+	if [[ ${CONF_DISPLAY[format_text]} == true && $text_style != "none" ]]; then
+		title+=${FORMAT[$text_style]}
+	fi
+	
+	if [[ -n $text ]]; then
+		# Title level 1
+		###############
+		
+		if [[ $level == 1 ]]; then
+			if ! is_pos_int "$border_style" true; then
+				border_style=13
+			fi
+			
+			init_box_style 1r "$border_style"
+			
+			sep_1=$(repeat_char "${CONF_DISPLAY[max_width_line]}${BS[4]}")
+			
+			length_part_2=$((${#text} + 4))
+			length_part_1=$(float_calc "(${CONF_DISPLAY[max_width_line]} - $length_part_2) / 2" 0)
+			length_part_3=$((CONF_DISPLAY[max_width_line] - length_part_2 - length_part_1))
+			
+			sep_part_1=$(repeat_char "${length_part_1}${BS[4]}")
+			sep_part_2=$(repeat_char "$length_part_2")
+			sep_part_3=$(repeat_char "${length_part_3}${BS[4]}")
+			
+			title+=$sep_1
+			title+=$N
+			title+=${sep_1}${N}
+			title+=${sep_part_1}${sep_part_2}${sep_part_3}${N}
+			title+="${sep_part_1}  ${text^^}  ${sep_part_3}${N}"
+			title+=${sep_part_1}${sep_part_2}${sep_part_3}${N}
+			title+=${sep_1}${N}
+			title+=$sep_1
+		
+		# Title level 2
+		###############
+		
+		elif [[ $level == 2 ]]; then
+			length_part_2=$((CONF_DISPLAY[max_width_line] - 2))
+			
+			if ! is_pos_int "$border_style" true; then
+				border_style=11
+			fi
+			
+			init_box_style 1r "$border_style"
+			
+			sep_1="${BS[0]}$(repeat_char "${length_part_2}${BS[4]}")${BS[1]}"
+			sep_2="${BS[3]}$(repeat_char "${length_part_2}${BS[4]}")${BS[2]}"
+			
+			title+=${sep_1}${N}
+			title+=$(pad_text "" "${BS[5]}" "${CONF_DISPLAY[max_width_line]}")$N
+			
+			if [[ ${CONF_DISPLAY[center_main_titles]} == true ]]; then
+				align="center"
+			fi
+			
+			title+=$(pad_text "${text^^}" "${BS[5]}" "${CONF_DISPLAY[max_width_line]}" "$align")$N
+			title+=$(pad_text "" "${BS[5]}" "${CONF_DISPLAY[max_width_line]}")$N
+			title+=$sep_2
+		
+		# Title level 3
+		###############
+		
+		elif [[ $level == 3 ]]; then
+			length_part_2=$((CONF_DISPLAY[max_width_line] - 2))
+			
+			if ! is_pos_int "$border_style" true; then
+				border_style=15
+			fi
+			
+			init_box_style 1r "$border_style"
+			
+			sep_1="${BS[0]}$(repeat_char "${length_part_2}${BS[4]}")${BS[1]}"
+			sep_2="${BS[3]}$(repeat_char "${length_part_2}${BS[4]}")${BS[2]}"
+			
+			title+=${sep_1}${N}
+			title+=$(pad_text "$text" "${BS[5]}" "${CONF_DISPLAY[max_width_line]}")$N
+			title+=$sep_2
+		
+		# Title level 4
+		###############
+		
+		elif [[ $level == 4 ]]; then
+			length_part_2=$(float_calc "(${CONF_DISPLAY[max_width_line]} - 2) / 2" 0)
+			
+			if ! is_pos_int "$border_style" true; then
+				border_style=15
+			fi
+			
+			init_box_style 1r "$border_style"
+			
+			sep_1=$(repeat_char "${length_part_2}${BS[4]}")
+			title+=$(pad_text "  $text" "" "${CONF_DISPLAY[max_width_line]}")$N
+			title+=" $sep_1"
+		fi
+	fi
+	
+	if [[ ${CONF_DISPLAY[format_text]} == true && $text_style != "none" ]]; then
+		title+=${FORMAT[default]}
+	fi
+	
+	if [[ $newline_after == true2 ]]; then
+		title+=$NN
+	elif [[ $newline_after == true ]]; then
+		title+=$N
+	fi
+	
+	echo -n "$title"
+}
+
+########################################
+## @subtitle Helper functions
+########################################
+
+# Check if "$comm" is executable.
+command_exists() {
+	local comm=$1
+	
+	# ------------------
+	
+	command -v "$comm" &> /dev/null
+}
+
+# Count the number of lines. The content can be passed through a pipe:
+# 
+#     some_command | count
+# 
+# or as the first argument:
+# 
+#     count "text..."
+# 
+# If the first argument is the literal string "file" and the second argument is
+# an absolute path, the function returns the number of lines in that file. Example:
+# 
+#     count "file" "/absolute/path/to/file"
+# 
+# If the first argument is not "file", then the second argument determines whether
+# empty lines should be included in the count (default: "true").
+count() {
+	local text opt1
+	
+	local include_empty_lines path
+	
+	# ------------------
+	
+	if [[ $# == 0 ]]; then
+		text=$(cat; echo z) # To prevent losing any trailing newlines
+		text=${text%z}      # that may be at the end of the standard input.
+	else
+		text=$1
+		opt1=$2
+		
+		if [[ $text == "file" ]]; then
+			text=""
+			path=$(format_path "$opt1")
+			
+			if [[ ! $path =~ ^"/" || ! -f $path ]]; then
+				path=""
+			fi
+		else
+			include_empty_lines=$opt1
+		fi
+	fi
+	
+	if ! is_bool "$include_empty_lines"; then
+		include_empty_lines=true
+	fi
+	
+	if [[ -n $path ]]; then
+		if [[ $include_empty_lines == true ]]; then
+			awk 'END{print NR}' "$path"
+		else
+			sed '/^$/d' "$path" | awk 'END{print NR}'
+		fi
+	elif [[ $include_empty_lines == true ]]; then
+		echo -n "$text" | awk 'END{print NR}'
+	else
+		echo -n "$text" | sed '/^$/d' | awk 'END{print NR}'
+	fi
+}
+
+# Return the length difference between the formatted content and the same content without formatting.
+# 
+# When a string contains formatting (such as ANSI codes), its character count becomes inaccurate. Example:
+# 
+#     $ bold=$(tput bold 2> /dev/null)
+#     $ default=$(tput sgr0 2> /dev/null)
+#     $ text="Lorem ipsum"
+#     $ text_formatted="${bold}Lorem ipsum${default}"
+#     $ echo "Nb of characters: ${#text}, ${#text_formatted}"
+#     Nb of characters: 11, 21
+# 
+# On display, however, the formatted string occupies only 11 characters, not 21.
+# Therefore, the function would return a length difference of 10.
+# 
+# If the second argument is an integer, the function returns the value of
+# "$2 + $diff_length".
+diff_length_formatting() {
+	local content=$1
+	local num=$2
+	
+	local diff_length length_wo_f result
+	
+	if ! is_pos_int "$num" true; then
+		num=0
+	fi
+	
+	# ------------------
+	
+	length_wo_f=$(length_wo_formatting "$content")
+	diff_length=$((${#content} - length_wo_f))
+	
+	if ! is_pos_int "$diff_length"; then
+		diff_length=0
+	fi
+	
+	result=$((num + diff_length))
+	
+	echo -n "$result"
+}
+
+# Display arguments on the error output.
+echo_err() {
+	echo "$@" >&2
+}
+
+# Escape text so that it can be safely used in "sed" commands, either as a pattern or as a replacement string.
+escape_sed() {
+	local var=$1
+	local type=$2
+	
+	local escaped_var
+	
+	# ------------------
+	
+	if [[ $type == "pattern" ]]; then
+		escaped_var=$(sed -e 's/[]\/$*.^[]/\\&/g' <<< "$var")
+	elif [[ $type == "replacement" ]]; then
+		escaped_var=$(sed -e 's/[\/&]/\\&/g' <<< "$var")
+	else
+		escaped_var=$var
+	fi
+	
+	echo -n "$escaped_var"
+}
+
+# Floating point calculations.
+float_calc() {
+	local calc=$1
+	local scale=$2
+	
+	local result
+	
+	# ------------------
+	
+	if command_exists awk; then
+		result=$(LC_NUMERIC=C awk "BEGIN { printf \"%.${scale}f\", $calc }")
+	elif command_exists bc; then
+		result=$(echo "res=$calc; scale=$scale; res / 1" | bc -l | sed -E "s/^(-)?\./\10./")
+	elif command_exists perl; then
+		result=$(LC_NUMERIC=C printf "%.${scale}f" "$(perl -l -e "print $calc")")
+	fi
+	
+	if ! is_float "$result"; then
+		result=""
+	fi
+	
+	result=$(trim "$result")
+	
+	echo -n "$result"
+}
+
+# Fold text passed either through a pipe:
+# 
+#     some_command | fold_text
+# 
+# or as the first argument:
+#
+#     fold_text "My long text..."
+# 
+# If provided as the first argument, the following optional arguments are supported:
+# 
+# - $2: Sets the maximum line length (default: ${CONF_DISPLAY[max_width_line]}).
+# - $3: Whether to break at spaces (default: true).
+# - $4: Fold style (default: standard). If set to "code", lines won't break at spaces
+#       and a backslash will be added at the end of each line.
+# 
+# Examples:
+# 
+#     fold_text "My long text..." 50
+#     fold_text "My long text..." "" false
+# 
+# The following command:
+# 
+#     fold_text "My very long text passed as the first argument..." 20
+# 
+# returns:
+# 
+#     My very long text
+#     passed as the first
+#     argument...
+# 
+# Whereas this:
+# 
+#     fold_text "My very long text passed as the first argument..." 20 false
+# 
+# returns:
+#
+#     My very long text pa
+#     ssed as the first ar
+#     gument...
+# 
+# And this:
+# 
+#     fold_text "My very long text passed as the first argument..." 20 false "code"
+# 
+# returns:
+# 
+#     My very long text p\
+#     assed as the first \
+#     argument...
+fold_text() {
+	local break_at_spaces break_at_spaces_arg break_trigger diff_length line style
+	local text text_folded text_without_formatting length length_by_default length_test
+	
+	if [[ $# == 0 ]]; then
+		text=$(cat; echo z) # To prevent losing any trailing newlines
+		text=${text%z}      # that may be at the end of the standard input.
+	else
+		text=$1
+		length=$2
+		break_at_spaces=$3
+		style=$4
+	fi
+	
+	if ! is_pos_int "$length"; then
+		length=${CONF_DISPLAY[max_width_line]}
+	fi
+	
+	if ! is_bool "$break_at_spaces"; then
+		break_at_spaces=true
+	fi
+	
+	if [[ ! $style =~ ^(code|standard)$ ]]; then
+		style="standard"
+	fi
+	
+	if [[ $style == "code" ]]; then
+		length=$((length - 1))
+		break_at_spaces=false
+	fi
+	
+	# ------------------
+	
+	break_trigger=$(float_calc "0.67 * $length" 0)
+	length_by_default=$length
+	
+	while IFS= read -r line || [[ -n $line ]]; do
+		if [[ $break_at_spaces == true ]]; then
+			break_at_spaces_arg="-s"
+		fi
+		
+		text_without_formatting=$(remove_formatting "$line")
+		length_test=${text_without_formatting:$length:1}
+		
+		if [[ -n $length_test && ! $length_test =~ ^[[:space:]]$ ]]; then
+			# The word continues past the break limit, so it will either be split
+			# or moved to the next line.
+			
+			length_test=${text_without_formatting:0:$((length - 1))}
+			length_test=${length_test% *}
+			
+			if ((${#length_test} < break_trigger)); then
+				# The beginning of the sentence would be followed by a large gap. In other words,
+				# the last word is so long that it's better to split it rather than break at
+				# a space. For example, instead of breaking at a space like this:
+				# 
+				#     Lorem ipsum dolor sit
+				#     https://www.lorem-ipsum-dolor-sit-123.ext/lorem-ipsum/dolor-sit/
+				#     amet-123/
+				# 
+				# we switch to breaking at the maximum line width instead:
+				# 
+				#     Lorem ipsum dolor sit https://www.lorem-ipsum-dolor-sit-123.ext/
+				#     lorem-ipsum/dolor-sit/amet-123/
+				
+				break_at_spaces_arg=""
+			fi
+		fi
+		
+		diff_length=$(diff_length_formatting "$line")
+		
+		if ((diff_length > 0)); then
+			length=$((length_by_default + diff_length))
+		fi
+		
+		# shellcheck disable=SC2086
+		line=$(echo -n "$line" | fold $break_at_spaces_arg -w "$length")
+		
+		if [[ $style == "code" ]]; then
+			line=$(echo -n "$line" | sed -e '$ ! s/$/\\/')
+		fi
+		
+		text_folded+=${N}${line}
+	done <<< "$text"
+	
+	text_folded=${text_folded#"$N"}
+	
+	echo -n "$text_folded"
+}
+
+# Format the path passed as the first argument.
+format_path() {
+	local path=$1
+	
+	local path_formatted
+	
+	if [[ -n $path ]]; then
+		path=$(tr -s "/" <<< "$path")
+	fi
+	
+	# ------------------
+	
+	if [[ $path == "/" ]]; then
+		path_formatted=$path
+	elif [[ -n $path ]]; then
+		path_formatted=$(sed -E "s/\/+$//" <<< "$path")
+	fi
+	
+	echo -n "$path_formatted"
+}
+
+# Search in the text passed in the first argument for presence of break tags
+# and return the field specified in the second argument.
+get_break() {
+	local text=$1
+	local field_no=$2
+	
+	if ! is_pos_int "$field_no"; then
+		field_no=1
+	fi
+	
+	field_no="\$${field_no}"
+	
+	# ------------------
+	
+	echo -n "$text" | awk -F "$BREAK" 'BEGIN {RS = "\0"}; {print '"$field_no"'}'
+}
+
+# Indent the text passed as the first argument. The indentation style depends on
+# the text format. The indentation width is calculated automatically, unless it's
+# specified using the second argument.
+# 
+# The available indentation styles are:
+# 
+#  - Comment. Example: "# Lorem ipsum dolor sit amet".
+#  - First column separated by a character (a colon by default) followed by a space.
+#    Example with a colon as separator: "Warning: Lorem ipsum dolor sit amet".
+#    The separator can be specified using the third argument.
+#  - None (the text will only be folded).
+# 
+# Below are a few examples of output.
+# 
+# The following text has a first column "Warning" separated by a colon:
+# 
+# Warning: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam in auctor orci. Nunc nulla mi sollicitudin.
+# 
+# It's indented as follows (using the default max width line; the fourth argument allows you
+# to specify a custom width):
+# 
+# Warning: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam in
+#          auctor orci. Nunc nulla mi sollicitudin.
+# 
+# The following text starts with a comment character:
+# 
+# # Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam in auctor orci. Nunc nulla mi sollicitudin.
+# 
+# It's indented as follows:
+# 
+# # Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam in auctor
+# # orci. Nunc nulla mi sollicitudin.
+# 
+# The second argument allows you to set a custom indentation width. For example,
+# if the value is 15, the indentation will look like:
+# 
+# Warning:       Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam
+#                in auctor orci. Nunc nulla mi sollicitudin.
+# 
+# #              Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+# #              Aliquam in auctor orci. Nunc nulla mi sollicitudin.
+indent() {
+	local text=$1
+	local custom_width_column1=$2
+	local sep=$3
+	local max_width=$4
+	
+	local column1 column1_by_default diff_width escaped_pattern escaped_replacement
+	local first_line_folded first_line_text indentation indentation_style is_first_line
+	local line remaining_text text_formatted width_column1 width_column2
+	
+	if ! is_pos_int "$custom_width_column1"; then
+		custom_width_column1=0
+	fi
+	
+	if [[ -z $sep ]]; then
+		sep=":"
+	fi
+	
+	if ! is_pos_int "$max_width"; then
+		max_width=${CONF_DISPLAY[max_width_line]}
+	fi
+	
+	# ------------------
+	
+	first_line_text=${text%%"$N"*}
+	
+	if [[ $first_line_text =~ ^( |$'\t')*"# " ]]; then
+		indentation_style="comment"
+		column1_by_default="${first_line_text%%# *}# "
+	elif [[ $first_line_text =~ ^.*"$sep " ]]; then
+		indentation_style="char"
+		column1_by_default="${first_line_text%%"$sep" *}$sep "
+	else
+		indentation_style="none"
+		column1_by_default=""
+	fi
+	
+	column1=$column1_by_default
+	width_column1=${#column1}
+	diff_width=$((custom_width_column1 - width_column1))
+	
+	if ((diff_width > 0)); then
+		column1+=$(repeat_char "$diff_width")
+		width_column1=${#column1}
+	fi
+	
+	width_column2=$((max_width - width_column1))
+	
+	if ((width_column1 < width_column2)); then
+		if [[ $indentation_style == "comment" ]]; then
+			indentation=$column1
+		else
+			indentation=$(repeat_char "$width_column1")
+		fi
+	else
+		# We disable indentation because the first column is too wide.
+		width_column2=$max_width
+	fi
+	
+	is_first_line=true
+	
+	while IFS= read -r line || [[ -n $line ]]; do
+		if [[ -n $line ]]; then
+			if [[ $is_first_line == true ]]; then
+				if [[ $column1 != "$column1_by_default" ]]; then
+					escaped_pattern=$(escape_sed "$column1_by_default" "pattern")
+					escaped_replacement=$(escape_sed "$column1" "replacement")
+					line=$(sed -E "s/^$escaped_pattern([^ ]*)/$escaped_replacement\1/" <<< "$line")
+				fi
+				
+				first_line_folded=$(fold_text "$line" "$max_width" | head -n 1)
+				text_formatted+=${first_line_folded}${N}
+			fi
+			
+			remaining_text=${line#"$first_line_folded"}
+			
+			if [[ -n $remaining_text ]]; then
+				text_formatted+=$(fold_text "$remaining_text" "$width_column2" | sed -E "s/^/$indentation/")$N
+			fi
+		else
+			text_formatted+=$N
+		fi
+		
+		is_first_line=false
+	done <<< "$text"
+	
+	echo -n "$text_formatted"
+}
+
+# Initialize the box style according to the style type and style number.
+init_box_style() {
+	local type=$1
+	local no=$2
+	
+	# One-row box style
+	if [[ $type == "1r" ]]; then
+		BS[0]=${ONE_ROW_BOX_STYLES[$no,0]}
+		BS[1]=${ONE_ROW_BOX_STYLES[$no,1]}
+		BS[2]=${ONE_ROW_BOX_STYLES[$no,2]}
+		BS[3]=${ONE_ROW_BOX_STYLES[$no,3]}
+		BS[4]=${ONE_ROW_BOX_STYLES[$no,4]}
+		BS[5]=${ONE_ROW_BOX_STYLES[$no,5]}
+		BS[6]=""
+		BS[7]=""
+		BS[8]=""
+		BS[9]=""
+	
+	# Two-row box style
+	elif [[ $type == "2r" ]]; then
+		BS[0]=${TWO_ROW_BOX_STYLES[$no,0]}
+		BS[1]=${TWO_ROW_BOX_STYLES[$no,1]}
+		BS[2]=${TWO_ROW_BOX_STYLES[$no,2]}
+		BS[3]=${TWO_ROW_BOX_STYLES[$no,3]}
+		BS[4]=${TWO_ROW_BOX_STYLES[$no,4]}
+		BS[5]=${TWO_ROW_BOX_STYLES[$no,5]}
+		BS[6]=${TWO_ROW_BOX_STYLES[$no,6]}
+		BS[7]=${TWO_ROW_BOX_STYLES[$no,7]}
+		BS[8]=${TWO_ROW_BOX_STYLES[$no,8]}
+		BS[9]=${TWO_ROW_BOX_STYLES[$no,9]}
+	fi
+}
+
+# Test if the variable is a boolean.
+is_bool() {
+	local var=$1
+	
+	# ------------------
+	
+	[[ $var == true || $var == false ]]
+}
+
+# Test if the variable is a float number.
+is_float() {
+	local var=$1
+	
+	# ------------------
+	
+	is_pos_int "$var" true || is_neg_int "$var" || [[ $var =~ ^-?(0|[1-9][0-9]*)\.[0-9]+$ ]]
+}
+
+# Test if the variable is a negative integer.
+is_neg_int() {
+	local var=$1
+	local include_zero=$2
+	
+	if ! is_bool "$include_zero"; then
+		include_zero=false
+	fi
+	
+	# ------------------
+	
+	if [[ $include_zero == true ]]; then
+		[[ $var =~ ^(0|-[1-9][0-9]*)$ ]]
+	else
+		[[ $var =~ ^-[1-9][0-9]*$ ]]
+	fi
+}
+
+# Test if the variable is a positive integer.
+is_pos_int() {
+	local var=$1
+	local include_zero=$2
+	
+	if ! is_bool "$include_zero"; then
+		include_zero=false
+	fi
+	
+	# ------------------
+	
+	if [[ $include_zero == true ]]; then
+		[[ $var =~ ^(0|[1-9][0-9]*)$ ]]
+	else
+		[[ $var =~ ^[1-9][0-9]*$ ]]
+	fi
+}
+
+# Return the length of the string after removing any formatting.
+length_wo_formatting() {
+	local content=$1
+	
+	local content_wo_formatting length
+	
+	# ------------------
+	
+	content_wo_formatting=$(remove_formatting "$content")
+	length=${#content_wo_formatting}
+	
+	echo -n "$length"
+}
+
+# Generate a numbered list from the text passed as the first argument.
+# The separator between entries is the newline character by default,
+# but it can be specified with the second argument. For example, if the text is:
+# 
+#     Lorem ipsum
+#     dolor sit
+#     amet
+# 
+# The result will be:
+# 
+#     1. Lorem ipsum
+#     2. dolor sit
+#     3. amet
+numbered_list() {
+	local text=$1
+	local sep=$2
+	
+	local i item indentation list nb_items printf_pattern
+	
+	# ------------------
+	
+	nb_items=$(count "$text")
+	indentation=$((${#nb_items} + 2))
+	printf_pattern="%-${indentation}s %s"
+	i=1
+	
+	while IFS="" read -r item || [[ -n $item ]]; do
+		if [[ -n $item ]]; then
+			# shellcheck disable=SC2059
+			list+=$(printf "$printf_pattern" "${i}." "$item")$N
+			i=$((i + 1))
+		fi
+	done <<< "$text"
+	
+	echo -n "$list"
+}
+
+# Pad the text passed as the first argument with characters specified in the
+# second argument. The total desired length is given by the third argument. 
+# For example, the following command:
+# 
+#     pad_text "Lorem ipsum" "~~" "25"
+# 
+# will output:
+# 
+#     ~~ Lorem ipsum         ~~
+# 
+# When the character string ("${#chars}") includes formatting, its actual
+# length on screen may differ from its literal character count. For instance:
+# 
+#     $ bold=$(tput bold)
+#     $ default=$(tput sgr0)
+#     $ chars="${bold}~~${default}"
+#     $ echo "${#chars}"
+#     12
+# 
+# Although the visual width is 2, the length appears as 12 due to formatting.
+# To handle this, you can explicitly specify the visual length using this format:
+# 
+#     total_length${BREAK}visible_length_of_chars
+# 
+# So the following:
+# 
+#     pad_text "Lorem ipsum" "$chars" "25${BREAK}2"
+# 
+# will correctly align the text with a visual length of 2 for the padding.
+pad_text() {
+	local text=$1
+	local chars=$2
+	local total_length=$3
+	local align=$4
+	
+	local default_length folded length length_chars
+	local length_part_1 length_part_2 line padded
+	
+	# ------------------
+	
+	if [[ ! $align =~ ^(center|left|right)$ ]]; then
+		align="left"
+	fi
+	
+	length_chars=$(get_break "$total_length" 2)
+	total_length=$(get_break "$total_length" 1)
+	
+	if ! is_pos_int "$total_length" true; then
+		total_length=0
+	fi
+	
+	if ! is_pos_int "$length_chars"; then
+		length_chars=${#chars}
+	fi
+	
+	default_length=$((total_length - 2 - length_chars * 2))
+	
+	if ((default_length > 0)); then
+		folded=$(fold_text "$text" "$default_length")
+		
+		if [[ -z $chars ]]; then
+			padded=$folded
+		else
+			while IFS= read -r line || [[ -n $line ]]; do
+				length=$(diff_length_formatting "$line" "$default_length")
+				
+				if [[ $align == "center" ]]; then
+					length_part_2=$(length_wo_formatting "$line")
+					length_part_2=$((length_part_2 + 2))
+					length_part_1=$(float_calc "($total_length - $length_part_2) / 2 - 1" 0)
+					line=$(repeat_char "$length_part_1")$line
+					
+					padded+=$(printf -- "$chars %-${length}s $chars" "$line")$N
+				elif [[ $align == "right" ]]; then
+					padded+=$(printf -- "$chars %${length}s $chars" "$line")$N
+				else
+					padded+=$(printf -- "$chars %-${length}s $chars" "$line")$N
+				fi
+				
+			done <<< "$folded"
+		fi
+	else
+		padded=$text
+	fi
+	
+	echo -n "$padded"
+}
+
+# Remove formatting (such as bold or color codes) from the text passed as the first argument.
+remove_formatting() {
+	local text=$1
+	
+	# ------------------
+	
+	echo -n "$text" | sed 's,\x1B[[(][0-9;]*[a-zA-Z],,g'
+}
+
+# Repeat a character based on the pattern specified in the first argument. If a string
+# is provided in the second argument, the repeated characters will be concatenated to it.
+# For example, the following command:
+# 
+#     repeat_char "10#end" "Lorem ipsum "
+# 
+# will output:
+# 
+#     Lorem ipsum ##########
+repeat_char() {
+	local info=$1
+	local string=$2
+	
+	local char chars nb position string_returned
+	
+	# ------------------
+	
+	nb=$(sed -En 's/^([1-9][0-9]*)[^0-9]*/\1/p' <<< "$info")
+	char=$(sed -En 's/^[1-9][0-9]*([^0-9])(end|start)?/\1/p' <<< "$info")
+	position=$(sed -En 's/^[1-9][0-9]*[^0-9](end|start)/\1/p' <<< "$info")
+	
+	if [[ -z $char ]]; then
+		char=" "
+	fi
+	
+	if [[ -z $position ]]; then
+		position="end"
+	fi
+	
+	if [[ -n $nb && -n $char && -n $position ]]; then
+		chars=$(printf -- "$char%.0s" $(seq "$nb"))
+		
+		if [[ $position == "start" ]]; then
+			string_returned=${chars}${string}
+		elif [[ $position == "end" ]]; then
+			string_returned=${string}${chars}
+		fi
+	fi
+	
+	echo -n "$string_returned"
+}
+
+# Trim the content of "$var" and return the result. The content can be passed
+# either through a pipe:
+# 
+#     some_command | trim
+# 
+# or as the first argument:
+# 
+#     trim " content... "
+trim() {
+	local var
+	
+	if [[ $# == 0 ]]; then
+		var=$(cat; echo z)
+		var=${var%z}
+	else
+		var=$1
+	fi
+	
+	local trimmed
+	
+	# ------------------
+	
+	trimmed=$(echo -n "$var" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
+	
+	echo -n "$trimmed"
+}
+
+usage() {
+	cat <<-EOF
+	
+	Usage: $(basename "$0") <command> [arguments...]
+	
+	Commands:
+
+	  box <text> [text_style] [border_style] [newline_before] [newline_after]
+	      Display text in a box.
+	      <text>           May include "$BREAK" to split title and description.
+	      text_style       bold|blink|underline|success|success_bg|warning|warning_bg|error|error_bg|default|none (default: bold)
+	      border_style     one-row: 0-15 (default: 4); two-row (if description): 0-6 (default: 3)
+	      newline_before   true|false (default: true)
+	      newline_after    false|true|true2 (default: true2; true2 adds two newlines)
+
+	  input <mode> [description] [question] [empty_is_valid] [indent_question] [timeout_s] [text_style] [border_style]
+	      Prompt for user input within a formatted box.
+	      mode             yn|Yn|yN|sure|list|<custom title>
+	      description      For "list": first line prompt, subsequent lines items.
+	      question         Custom prompt text (overrides default).
+	      empty_is_valid   true|false (default: true)
+	      indent_question  true|false (default: true)
+		  timeout_s        Timeout in seconds (optional; default: none)
+		  text_style       Text style (default: bold).
+	      border_style     Integer frame style.
+
+	  title <text> <level> [text_style] [border_style] [newline_before] [newline_after]
+	      Display a formatted title or heading.
+	      <text>           The title text to display.
+	      <level>          1|2|3|4 (heading style).
+	      text_style       Text style (default: success).
+	      border_style     Integer frame style.
+	      newline_before   true|false (default: true)
+	      newline_after    false|true|true2 (default: true2)
+
+	Global Options:
+	  -h, --help           Show this help message and exit.
+
+	Examples:
+
+	# One-row box demo
+	##################
+
+	bashui box "Daily backup completed successfully"
+	bashui box "Build succeeded: All tests passed" success
+	bashui box "Disk usage warning: /var is 99% full" warning
+	bashui box "Service startup error: Failed to start Apache" error
+	bashui box "Out of memory" error_bg
+
+	for border_style in {0..15}; do 
+	  bashui box "One-row border style \$border_style demo" default "\$border_style"
+	done
+
+	# Two-row box demo
+	##################
+
+	bashui box "Server maintenance${BREAK}Scheduled maintenance starts at 02:00 UTC. Services will be unavailable for ~15 minutes. Please save your work."
+
+	bashui box "High CPU usage warning${BREAK}CPU load has been above 90% for over 5 minutes." warning
+
+	bashui box "Database connection error${BREAK}Failed to connect to userdb on db-server-01: Connection timed out." error_bg
+
+	for border_style in {0..6}; do 
+	  bashui box "Two-row border style \$border_style demo${BREAK}Lorem ipsum dolor sit amet, consectetuer adipiscing elit. In sapien ante; dictum id, pharetra ut, malesuada et, magna. Class aptent taciti sociosque." default "\$border_style"
+	done
+
+	# Input modes demo
+	##################
+
+	bashui input yN "Overwrite file?"
+	bashui input Yn "Overwrite file?"
+	bashui input yn "Overwrite file?"
+	bashui input sure
+	bashui input list $'Select database engine for your application.\nMySQL\nPostgreSQL\nMongoDB'
+	bashui input "Deployment confirmation" "You are about to deploy to production. This action cannot be undone." "Proceed with deployment? [y/N]:"
+
+	# Title level demo
+	##################
+
+	for level in {1..4}; do 
+	  bashui title "Title level \$level demo" "\$level"
+	done
+
+	# Text style demo
+	#################
+
+	for text_style in bold success success_bg warning warning_bg error error_bg default blink; do 
+	  bashui box "Text style \$text_style demo" "\$text_style"
+	done
+
+	EOF
+}
+
+################################################################################
+## @title Script
+################################################################################
+
+########################################
+## @subtitle Dependencies
+########################################
+
+if (( BASH_VERSINFO[0] < 4 )); then
+	echo_err "bash ≥ 4 must be installed."
+	
+	exit 1
+fi
+
+if ! command_exists awk; then
+	echo_err "awk must be installed."
+	
+	exit 1
+fi
+
+########################################
+## @subtitle Variable initialization
+########################################
+
+# Box style
+
+declare -a BS
+
+BS[0]=""
+BS[1]=""
+BS[2]=""
+BS[3]=""
+BS[4]=""
+BS[5]=""
+BS[6]=""
+BS[7]=""
+BS[8]=""
+BS[9]=""
+
+########################################
+## @subtitle Arguments
+########################################
+
+if [[ $# == 0 ]]; then
+	usage
+	
+	exit 1
+fi
+
+case "$1" in
+	-h|--help)
+		usage
+		
+		exit 0
+		;;
+	
+	box|input|title)
+		cmd=$1
+		
+		shift
+		
+		"$cmd" "$@"
+		;;
+	
+	*)
+		echo "Unknown command: $1" >&2
+		
+		usage
+		
+		exit 1
+		;;
+esac
