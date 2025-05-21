@@ -103,7 +103,7 @@ bashui title "Setup complete" 2 success
 
 ## License
 
-Author: Jean-Philippe Fleury <https://github.com/jpfleury>
+Author: Jean-Philippe Fleury <https://github.com/jpfleury>  
 Copyright © Jean-Philippe Fleury, 2021-2025
 
 This program is free software: you can redistribute it and/or modify
